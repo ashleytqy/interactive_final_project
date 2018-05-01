@@ -3,6 +3,7 @@ var world;
 
 // references to our markers (which are defined in the HTML document)
 var hiroMarker, zbMarker;
+var width = 800;
 
 // how long has each marker been visible?
 var hiroVisCount = 0;
@@ -26,166 +27,191 @@ var overlayCanvas;
 var birds = [];
 var firstbird, secondbird;
 
-class Bird{
-  constructor(name, description, xPos, yPos, image,sizex, sizey, status){
-    this.name = name;
-    this.description = description;
-    this.image = image;
-    this.sizex = sizex;
-    this.sizey = sizey;
-    this.x = xPos;
-    this.y = yPos;
-    this.status = status;
-  }
+class Bird {
+    constructor(name, description, xPos, yPos, sizex, sizey, status, image1, image2, image3) {
+        this.name = name;
+        this.description = description;
+
+        this.x = xPos;
+        this.y = yPos;
+
+        this.sizex = sizex;
+        this.sizey = sizey;
+
+        this.status = status;
+
+        this.images = [image1, image2, image3];
+        this.imageIndex = 0;
+    }
+
+    getCurrentImage() {
+        return this.images[this.imageIndex];
+    }
+
+    nextImage() {
+        if (this.imageIndex >= 2) {
+            this.imageIndex = -1;
+        }
+        this.imageIndex++;
+    }
+
+    prevImage() {
+        if (this.imageIndex <= 0) {
+            this.imageIndex = 3;
+        }
+        this.imageIndex--;
+    }
 }
 
 function preload() {
-  b1 = loadImage('bird1.png');
-  b2 = loadImage('bird2.png');
+    b1 = loadImage('bird1.png');
+    b2 = loadImage('bird2.png');
 
-  tree = loadImage("tree.jpg");
-  bird1 = loadImage("bird1.png");
-  bird2 = loadImage("bird2.png"); 
-  bird3 = loadImage("bird3.png");
-  bird4 = loadImage("bird4.png"); 
+    tree = loadImage("tree.jpg");
+    bird1 = loadImage("bird1.png");
+    bird2 = loadImage("bird2.png");
+    bird3 = loadImage("bird3.png");
+    bird4 = loadImage("bird4.png");
 }
 
 function setup() {
-  world = new World("ARScene");
+    world = new World("ARScene");
 
-  firstbird = new Bird('b1', 'description', 600, 250, b1, 100,100, 'hidden');
-  secondbird = new Bird('b2', 'description', 500, 260, b2, 100,100, 'hidden');
-  birds.push(firstbird);
-  birds.push(secondbird);
-  // grab a reference to our marker in the HTML document
-  hiroMarker = world.getMarker("hiro");
-  zbMarker = world.getMarker("zb");
+    setupBirds();
+    setARMarkers();
 
-  // put a painting on top of each marker
-  var birdNum1 = new Plane({
-    x:0, y:0, z:0,
-    width: 3, height: 2,
-    rotationX: -90,
-    asset: 'birds1'
-  });
-  hiroMarker.addChild( birdNum1 );
+    // create our overlay canvas (double the size as the regular canvas, which is 800x600)
+    // this is because the canvas has to be scaled up to accomodate the AR video stream
+    overlayCanvas = createGraphics(1600, 1200);
+}
 
-  var birdNum2 = new Plane({
-    x:0, y:0, z:0,
-    width: 2, height: 1,
-    rotationX: -90,
-    asset: 'birds2'
-  });
-  zbMarker.addChild( birdNum2 );
+function setupBirds() {
+    firstbird = new Bird('b1', 'description', 600, 250, 100, 100, 'hidden', b1, bird3, bird4);
+    secondbird = new Bird('b2', 'description', 500, 260, 100, 100, 'hidden', b2, bird3, bird4);
 
-  // create our overlay canvas (double the size as the regular canvas, which is 800x600)
-  // this is because the canvas has to be scaled up to accomodate the AR video stream
-  overlayCanvas = createGraphics(1600, 1200);
+    birds.push(firstbird);
+    birds.push(secondbird);
+}
+
+function setARMarkers() {
+    // grab a reference to our marker in the HTML document
+    hiroMarker = world.getMarker("hiro");
+    zbMarker = world.getMarker("zb");
+
+    // put a painting on top of each marker
+    var bird1 = new Plane({
+        x: 0,
+        y: 0,
+        z: 0,
+        width: 3,
+        height: 2,
+        rotationX: -90,
+        asset: 'birds1'
+    });
+
+    var bird2 = new Plane({
+        x: 0,
+        y: 0,
+        z: 0,
+        width: 2,
+        height: 1,
+        rotationX: -90,
+        asset: 'birds2'
+    });
+
+    hiroMarker.addChild(bird1);
+    zbMarker.addChild(bird2);
 }
 
 function draw() {
+    if (!tracking) {
+        // erase the background of the world (hiding the video feed)
+        world.clearDrawingCanvas();
+        background(0, 200);
 
-  // if we are in tracking mode we really don't need to do anything here
-  if (tracking) {
+        // draw our painting
+        drawImageCarousel(currentBird);
+        displayBirds(birds);
+        addCloseButton();
 
-  }
+        // draw the overlay canvas
+        imageMode(CORNER);
+        image(overlayCanvas, 0, 0, overlayCanvas.width / 2, overlayCanvas.height / 2);
+    }
+}
 
-  // we are in 2D mode
-  else {
-    // erase the background of the world (hiding the video feed)
-    world.clearDrawingCanvas();
-    background(0, 200);
+function mousePressed() {
+    if (tracking) {
+        // see which marker is currently visible
+        if (hiroMarker.isVisible()) {
+            tracking = false;
+            firstbird.status = 'visible';
+            currentBird = firstbird;
+        } else if (zbMarker.isVisible()) {
+            tracking = false;
+            secondbird.status = 'visible';
+            currentBird = secondbird;
+        }
+    }
+}
 
-    // in my AR system the canvas is ALWAYS 800 x 600, but it's scaled up/down as needed
+//function for displaying birds that have been scanned
+function displayBirds(birds) {
+    for (let i = 0; i < birds.length; i++) {
+        var bird = birds[i];
 
-    // figure out how large the painting should be (50% of the window)
-    var desiredWidth = 400;
-    var scalingFactor = desiredWidth/currentBird.width;
+        if (bird.status === 'visible') {
+            image(bird.images[0], bird.x, bird.y, bird.sizex, bird.sizey);
 
-    // draw our painting
+            if (dist(mouseX, mouseY, bird.x, bird.y) <= 70) {
+                console.log('triggered');
+                textSize(28);
+                fill(0, 255, 0);
+                text(bird.name, bird.x, bird.y);
+            }
+        }
+    }
+}
+
+function keyPressed() {
+    if (tracking) {
+        if (keyCode === LEFT_ARROW) {
+            currentBird.prevImage();
+            console.log(currentBird.imageIndex);
+        } else if (keyCode === RIGHT_ARROW) {
+            currentBird.nextImage();
+            console.log(currentBird.imageIndex);
+        }
+    }
+}
+
+function drawImageCarousel(currentBird) {
+    var bird = currentBird.getCurrentImage();
+
     imageMode(CENTER);
-    image(currentBird, width/2-200, height/2, 300, 200);
+    image(bird, width / 2 - 200, height / 2, 300, 200);
+
     text('bird name', 250, 400);
     text('description', 250, 450);
-    rectMode(CENTER);
-    image(tree,width/2+200, height/2, 350, 350 );
-    displayBirds(birds);
+    text('[press <- or -> to view more images]', 250, 500);
 
+    rectMode(CENTER);
+    image(tree, width / 2 + 200, height / 2, 350, 350);
+}
+
+function addCloseButton() {
     // draw a 'close' button
     fill(255);
     textSize(25);
     textAlign(CENTER);
-    text("[ close ]", width/2-50, 200 );
-/*
-    // set the background size of our canvas
-    canvas = createCanvas(canvasLength, canvasLength);
-    //canvas.parent('view-container');
-    image(tree, 0, 0, 500, 500);
-    image(bird1, 150, 150, 80, 80);
-    image(bird2, 200, 200, 80, 80);
-    image(bird3, 25, 200, 80, 80);
-    image(bird4, 250, 40, 100, 80);
-*/
-    // if the user is clicking the mouse we should let them draw on the OVERLAY canvas
+    text("[ close ]", width / 2 - 50, 200);
+
     if (mouseIsPressed) {
-      console.log(mouseX, mouseY);
-      overlayCanvas.noStroke();
-      overlayCanvas.fill(255, 75);
-      overlayCanvas.ellipse(mouseX, mouseY, 10, 10);
-
-      // how far are they from the close button?  If so, close the window
-      if (dist(mouseX, mouseY, width/2-50,200) < 50) {
-        tracking = true;
-        overlayCanvas.clear();
-        world.clearDrawingCanvas();
-      }
+        // how far are they from the close button?  If so, close the window
+        if (dist(mouseX, mouseY, width / 2 - 50, 200) < 50) {
+            tracking = true;
+            overlayCanvas.clear();
+            world.clearDrawingCanvas();
+        }
     }
-
-    // draw the overlay canvas
-    imageMode(CORNER);
-    image(overlayCanvas, 0, 0, overlayCanvas.width/2, overlayCanvas.height/2);
-  }
-
 }
-
-function mousePressed() {
-  // are we currently in tracking mode?
-  if (tracking) {
-    // see which marker is currently visible
-    if (hiroMarker.isVisible()) {
-      tracking = false;
-      firstbird.status = 'visible';
-      currentBird = firstbird.image;
-    }
-    else if (zbMarker.isVisible()) {
-      tracking = false;
-      secondbird.status = 'visible';
-      currentBird = secondbird.image;
-    }
-  }
-}
-
-//function for displaying birds that have been scanned
-function displayBirds(birds){
-  for(let i = 0; i < birds.length; i++){
-    if(birds[i].status === 'visible'){
-      image(birds[i].image, birds[i].x, birds[i].y, birds[i].sizex, birds[i].sizey);
-      if(dist(mouseX, mouseY, birds[i].x, birds[i].y) <= 70){
-      	console.log('triggered');
-        textSize(28);
-        fill(0,255,0);
-          text(birds[i].name, birds[i].x, birds[i].y);
-      }
-    }
-  }
-}
-
-/*
-function mousePressed() {
-  var d = dist(mouseX, mouseY, 150, 150);
-  if (d < 100) {
-    //tint(255, 126);
-    image(bird1, 150, 150, 80, 80, 255, 126);
-  }
-}
-*/
